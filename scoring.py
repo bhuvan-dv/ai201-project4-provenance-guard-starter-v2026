@@ -51,12 +51,25 @@ def combine_signals(model_score: float, style_score: float) -> float:
 
     The weights in config.py are placeholders. Change them, or ignore them and
     write a different rule.
+
+    The rule: a straight weighted average most of the time, but when the two
+    signals split by more than 0.4, the average is replaced with a 65/35 lean
+    toward whichever signal reads *more human* — not the more suspicious one.
+    A false accusation costs a real writer more than a missed detection costs
+    the site, so on a sharp disagreement the benefit of the doubt goes to the
+    writer rather than splitting the difference at 0.5 ("unsure" either way).
     """
-    # TODO: replace this
-    return (
+    base = (
         config.WEIGHT_MODEL_SIGNAL * model_score
         + config.WEIGHT_STYLE_SIGNAL * style_score
     )
+
+    if abs(model_score - style_score) > 0.4:
+        lower = min(model_score, style_score)
+        higher = max(model_score, style_score)
+        base = 0.65 * lower + 0.35 * higher
+
+    return round(min(max(base, 0.0), 1.0), 4)
 
 
 def score_to_label(score: float) -> tuple[str, str]:
@@ -85,12 +98,26 @@ def score_to_label(score: float) -> tuple[str, str]:
     think if they got it on their own work. That question is the whole
     milestone.
     """
-    # TODO: replace this — thresholds are in config.py
     if score >= config.AI_THRESHOLD:
-        return "ai", "PLACEHOLDER — write the high-confidence AI label."
+        return (
+            "ai",
+            "We think this was most likely written by an AI system, based on "
+            "patterns in word choice and sentence structure. If you wrote this "
+            "yourself, you can appeal and a person will take another look.",
+        )
     if score <= config.HUMAN_THRESHOLD:
-        return "human", "PLACEHOLDER — write the high-confidence human label."
-    return "unsure", "PLACEHOLDER — write the unsure label."
+        return (
+            "human",
+            "We think this was most likely written by a person. The sentence "
+            "rhythm and word choice look like ordinary human writing.",
+        )
+    return (
+        "unsure",
+        "We can't confidently tell whether this was written by a person or "
+        "an AI system. That's not an accusation — it just means our signals "
+        "didn't point clearly one way. You're welcome to appeal if you'd "
+        "like a person to take a closer look.",
+    )
 
 
 def label_ranges() -> list[tuple[str, str]]:

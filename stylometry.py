@@ -49,23 +49,25 @@ def words(text: str) -> list[str]:
 
 def sentence_length_spread(text: str) -> float:
     """
-    How much sentence length varies. ← TODO
+    How much sentence length varies.
 
-    Returns:
-        A float. Decide yourself what scale it's on and which direction means
-        "more human" — then write that down, because your combining rule
-        depends on knowing it.
+    Returns the coefficient of variation (stdev / mean) of sentence lengths,
+    measured in words per sentence. Higher means more human — generated text
+    tends toward even, mid-length sentences, while human writing is lumpier.
 
-    A hint on what you're reaching for: the standard deviation of sentence
-    lengths, probably divided by the mean so a long text and a short one are
-    comparable. `statistics.stdev` is imported for you.
-
-    Watch the edge case: a one-sentence submission has no spread at all, and
-    `stdev` raises on fewer than two values. Decide what that should return
-    before the attack set decides for you.
+    A single-sentence submission has no spread to measure. That reads as
+    "no variation observed", which is the same direction as the AI-ish end
+    of the scale, so it returns 0.0 rather than raising.
     """
-    # TODO: replace this
-    return 0.0
+    sents = sentences(text)
+    lengths = [len(words(s)) for s in sents if words(s)]
+    if len(lengths) < 2:
+        return 0.0
+
+    mean = statistics.mean(lengths)
+    if mean == 0:
+        return 0.0
+    return statistics.stdev(lengths) / mean
 
 
 def type_token_ratio(text: str) -> float:
@@ -80,8 +82,10 @@ def type_token_ratio(text: str) -> float:
     directly comparable on it, and if your test inputs vary a lot in length,
     that alone can look like a signal.
     """
-    # TODO: replace this
-    return 0.0
+    w = words(text)
+    if not w:
+        return 0.0
+    return len(set(w)) / len(w)
 
 
 def punctuation_density(text: str) -> float:
@@ -93,9 +97,19 @@ def punctuation_density(text: str) -> float:
         semicolons, dashes — is a real choice. Semicolons and em dashes are
         more interesting than full stops, because they vary more between
         writers.
+
+    Semicolons, colons, and dashes are weighted 3x over commas and terminal
+    punctuation, since they're the marks a writer chooses rather than the
+    ones a sentence requires. The total is normalized per word, so length
+    doesn't drive the score on its own.
     """
-    # TODO: replace this
-    return 0.0
+    w = words(text)
+    if not w:
+        return 0.0
+
+    distinctive = len(re.findall(r"[;:—–-]", text))
+    ordinary = len(re.findall(r"[.,!?]", text))
+    return (distinctive * 3 + ordinary) / len(w)
 
 
 # ── Combining them ───────────────────────────────────────────────────────────
@@ -121,9 +135,18 @@ def style_signal(text: str) -> float:
     clearly human, plain conventional human writing, lightly-edited AI — before
     you trust it. Plain and ordinary, not formal: formal prose reads as *human*
     to signal one, and it is plain writing that gets accused.
+
+    All three raw measures point toward "more human" as they rise, so each is
+    normalized onto 0-1 (clipped at a typical ceiling) and then inverted
+    before averaging, to land on the same "higher = more likely AI" scale
+    `detector.model_signal` uses.
     """
-    # TODO: replace this
-    return 0.5
+    spread = min(sentence_length_spread(text) / 1.2, 1.0)
+    ttr = type_token_ratio(text)
+    punct = min(punctuation_density(text) / 0.3, 1.0)
+
+    human_likeness = (spread + ttr + punct) / 3
+    return round(1.0 - human_likeness, 4)
 
 
 if __name__ == "__main__":

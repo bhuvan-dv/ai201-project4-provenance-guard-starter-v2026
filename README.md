@@ -387,7 +387,8 @@ it was going for. Thresholds: human ≤0.35, unsure 0.35–0.65, AI ≥0.65.
 | FL01_01–06 | flood_same_creator | 20 rapid submissions, one creator | 200 | human | 0.209 | HELD |
 | FL01_07–12 | flood_same_creator | 20 rapid submissions, one creator | 429 | — | — | HELD |
 
-**9 BROKE, 47 HELD, 0 crashed.** Every failure clustered in exactly the two
+**14 BROKE, 42 HELD, 0 crashed** (9 `evasion` + 5 `false_positive`). Every
+failure clustered in exactly the two
 families the signals' own documented blind spots predict: `evasion` (9 of 10 —
 my style signal's shape-only measure is cheap to game) and `false_positive` (5
 of 8 — my model signal rewards formal/plain/non-native phrasing as
@@ -499,7 +500,7 @@ Produced by `run_eval.py::main` + five hand-run appeal trials. Full output:
 |---|---|---|---|---|---|
 | 1. My own writing flagged as AI | ≤ 1 of 10 `ai` | 2/10 | 2/10 | 2/10 | **MISSED** |
 | 2. Score spread (AI vs. human) | ≥ 0.40 apart | 0.3874 | 0.3874 | 0.3874 | **MISSED** |
-| 3. All three labels reachable | 3 of 3 | 3/3 | 3/3 | 3/3 | MET |
+| 3. All three labels reachable | 3 of 3 | 3/3 | 3/3 | 3/3 | MET *(before only — see The Improvement)* |
 | 4. Appeal always changes status | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
 | 5. Bad input never crashes | 4/4 400s | 4/4 | 4/4 | 4/4 | MET |
 
@@ -633,21 +634,62 @@ Milestone 5's fix is aimed.
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** `AI_THRESHOLD` in `config.py`, from `0.65` to `0.75`
+(`HUMAN_THRESHOLD` unchanged at `0.35`). The unsure band widened from
+0.30 points wide to 0.40. Nothing else moved — same weights, same rate
+limits, same code.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** Every `false_positive` attack that broke
+(FP02–FP06) and my own Criterion 1 miss landed with a `confidence` between
+0.657 and 0.731 — all of it formal, careful, or plain human writing that
+`model_signal` reads as unusually predictable, crossing the old 0.65 bar into
+a confident `ai` label. None of that writing scored anywhere near the high
+end (the genuinely-AI attacks in the set score 0.83–0.999). There was a real
+gap between "predictable-reading human prose" and "actually AI" that the old
+threshold didn't use — moving it to 0.75 uses that gap.
 
 ### Attack Run — After
 
-<!-- Same format. `run_attacks.py --label after` -->
+Full run: `results/attack_run_2026-11-08_1711_after.md` (56 attacks, 0
+crashes). Only the `false_positive` family changed:
 
+| ID | Family | Before | After |
+|---|---|---|---|
+| FP02 | false_positive | ai (0.659) — BROKE | unsure (0.659) — **HELD** |
+| FP03 | false_positive | ai (0.690) — BROKE | unsure (0.690) — **HELD** |
+| FP04 | false_positive | ai (0.657) — BROKE | unsure (0.657) — **HELD** |
+| FP05 | false_positive | ai (0.693) — BROKE | unsure (0.693) — **HELD** |
+| FP06 | false_positive | ai (0.685) — BROKE | unsure (0.685) — **HELD** |
 
+Every other attack's raw score was identical before and after (the threshold
+doesn't touch `combine_signals`, only `score_to_label`) — so every `evasion`,
+`prompt_injection`, `malformed`, and `flood_same_creator` verdict from
+**Attack Run — Before** is unchanged. **14 BROKE → 9 BROKE** (all 9 remaining
+are the `evasion` family, EV01–EV09; EV10 still holds, unaffected by the
+threshold change since its score never approached either boundary).
 
-**Did it help, and how do I know:**
+**Did it help, and how do I know:** For false positives, yes, measurably — 5
+of 5 broken `false_positive` attacks now hold, and Criterion 1 (my own
+writing) went from `2/10 ai` to `0/10 ai` in all three trials, meeting its
+≤1-of-10 target. I know because the raw `confidence` scores are byte-for-byte
+identical before and after (confirmed above) — only the label boundary moved,
+which is exactly what I changed and nothing else.
 
-<!-- Widening the unsure band usually fixes one problem and creates another.
-     Reporting that trade honestly is worth full credit. -->
-
+**What it cost, on the other side:** Criterion 3 (all three labels reachable)
+**broke as a direct result.** My "confidently AI" calibration text scores
+`0.7362` — comfortably past the old 0.65 bar, short of the new 0.75 one — so
+the same three inputs that reached all three labels before the change now
+reach only two (`unsure`, `human`); `ai` is no longer reachable by *that*
+input. The `ai` label is still reachable in principle — several attack-set
+inputs (MF05–MF08, EV10) still score 0.83–0.999 and still land `ai` — but my
+own criterion's test case no longer demonstrates it, and I'm reporting that
+honestly rather than swapping in a more extreme calibration text after the
+fact, which would make the before/after comparison dishonest. More
+generally: any genuinely-AI submission that used to score in the 0.65–0.75
+band now reads as `unsure` instead of a confident accusation — real AI text
+in that band gets through with a softer label. Fewer false accusations of
+real writers, at the direct cost of weaker, less confident labeling of some
+real AI text. See **What's Still Broken** for where I'd go from here.
 
 
 ---

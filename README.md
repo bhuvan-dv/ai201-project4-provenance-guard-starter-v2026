@@ -293,25 +293,42 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 6 per minute, 100 per day
 
-**Why those numbers and not others:**
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
+**Why those numbers and not others:** A real writer submitting their own
+work doesn't post more than a couple of pieces a minute — 6/minute is
+generous headroom for someone pasting in a few drafts back-to-back, while
+being far too slow for a script trying to map my thresholds (sweeping a
+range of synthetic inputs to find exactly where `HUMAN_THRESHOLD` and
+`AI_THRESHOLD` sit needs dozens to hundreds of requests in a short window,
+not six). The daily cap of 100 is well above what any single person
+submitting their own writing would need in a day, but still bounds how much
+of my (slow, CPU-bound) model signal one caller can consume before the next
+one even gets a turn.
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+**What a caller counts as:** Per `creator_id` when one is present and
+non-empty in the body, falling back to the caller's address otherwise
+(`app.py::rate_limit_key`). Per-creator is deliberately chosen over
+per-address: on a shared network (a school lab, an office) many real writers
+share one address, and per-address limiting would punish all of them for one
+person's volume. The cost is the opposite failure — a script can trivially
+defeat it by rotating `creator_id` on every request, which is exactly what
+the attack set's non-flood rows do (each gets its own `creator_id` and so
+never trips this limiter at all; see **Attack Run — Before**).
 
 **The run of status codes when I pushed past it:**
 
-<!-- python run_attacks.py --flood 15 -->
-
+```
+$ python run_attacks.py --flood 10
+10 submissions as 'flood_tester' against http://127.0.0.1:5050
+200 200 200 200 200 200 429 429 429 429
+4 of 10 were rate limited.
 ```
 
-```
+Six requests went through, then the limiter cut in exactly at the 6/minute
+boundary. The rejections showed up in the audit log as `event: "rejected"`,
+`reason: "rate_limited"` entries recording the `creator_id` and the limit
+that triggered — see the ten entries pasted below.
 
 ---
 

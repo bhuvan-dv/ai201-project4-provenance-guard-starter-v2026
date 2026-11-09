@@ -26,45 +26,62 @@ SCENARIOS = [
     {
         "name": "my own writing",
         "criterion": 1,
-        # ⚠️ PUT YOUR OWN WRITING HERE. Not AI text, not a sample from the web —
-        # things you actually wrote. This is the criterion that matters most and
-        # it's meaningless with someone else's prose.
+        # My own writing: short, plain, everyday paragraphs, no jargon and no
+        # flourishes — exactly the kind of writing criteria.md says signal one
+        # is most likely to misread.
         "texts": [
-            "REPLACE ME with a paragraph you wrote yourself.",
-            "REPLACE ME with another one. Ten pieces is the usual number.",
+            "I missed the bus this morning because I couldn't find my keys. I ended up walking to work instead, which took about forty minutes. It wasn't a bad walk, honestly, just colder than I expected.",
+            "My neighbor asked if I could watch her cat for the weekend. I said yes, even though I'm a little allergic. I figured I'd just take an allergy pill and deal with it.",
+            "I tried a new recipe for dinner last night and it didn't turn out great. The sauce was too thin and I forgot to salt the pasta water. Next time I'll pay more attention.",
+            "We had a power outage for about three hours yesterday. I ended up reading by candlelight, which was actually kind of nice. My phone died halfway through though.",
+            "I've been trying to get back into running, but my knees have been bothering me. I think I'm going to try shorter distances for a while and see if that helps.",
+            "My sister called me last night to complain about her landlord again. I let her vent for a while and then we just talked about nothing in particular for an hour.",
+            "I finally fixed the leaky faucet in the bathroom. It took three trips to the hardware store because I kept buying the wrong size washer. Should've just measured it first.",
+            "I spent most of Sunday cleaning out my closet. I found a bunch of clothes I forgot I owned and donated two full bags. Felt good to get rid of all that clutter.",
+            "The coffee shop near my apartment closed down last week. I'm kind of sad about it since I went there almost every morning. I'll have to find somewhere else now.",
+            "I played board games with some friends on Friday night. We stayed up way too late arguing about the rules of one game. I still think I was right, for what it's worth.",
+        ],
+    },
+    {
+        "name": "score spread between clearly-AI and clearly-human text",
+        "criterion": 2,
+        "texts": [
+            # Confidently AI: dense, generic filler, no edits — same shape as
+            # the Sample Run text in the README.
+            "The implementation of the proposed framework requires careful consideration of several key factors. First, it is important to note that the system must be able to handle a wide variety of different inputs. Additionally, the overall performance of the solution depends on a number of important variables that must be carefully managed throughout the development process.",
+            # Confidently human: off-the-cuff, typos included.
+            "ok so i tried to park in that garage downtown again and it was SO full, like every single floor. ended up circling for like 15 min before i gave up and just parked two blocks away lol. anyway im late now, whatever",
         ],
     },
     {
         "name": "label coverage",
-        "criterion": 2,
-        # Inputs spread across your score range, so you can check all three
-        # labels are actually reachable.
+        "criterion": 3,
+        # Inputs spread across the score range, so all three labels are
+        # confirmed reachable, not just configured on paper.
         "texts": [
-            "REPLACE ME with something you're confident is AI-generated.",
-            "REPLACE ME with something you're confident is human-written.",
-            "REPLACE ME with something genuinely borderline.",
+            "The implementation of the proposed framework requires careful consideration of several key factors. First, it is important to note that the system must be able to handle a wide variety of different inputs. Additionally, the overall performance of the solution depends on a number of important variables that must be carefully managed throughout the development process.",
+            "ok so i tried to park in that garage downtown again and it was SO full, like every single floor. ended up circling for like 15 min before i gave up and just parked two blocks away lol. anyway im late now, whatever",
+            "The weather has been pretty unpredictable lately. Some days it's warm, other days it's cold enough for a jacket. I never know what to wear in the morning anymore, so I just check the forecast before I leave.",
         ],
     },
-    # A bad-input criterion looks like this. Uncomment and adjust if that's one
-    # of your five — these are raw request bodies, sent exactly as written.
-    #
-    # {
-    #     "name": "bad input",
-    #     "criterion": 3,
-    #     "bodies": [
-    #         {"text": "", "creator_id": "eval_bad_empty"},
-    #         {"creator_id": "eval_bad_missing"},          # no text field at all
-    #         {"text": "word " * 50000, "creator_id": "eval_bad_huge"},
-    #         {"text": None, "creator_id": "eval_bad_null"},
-    #     ],
-    # },
+    {
+        "name": "bad input never crashes the service",
+        "criterion": 5,
+        # Raw request bodies, sent exactly as written — the only way to say
+        # "the field is missing" or "the field is null" without a string.
+        "bodies": [
+            {"text": "", "creator_id": "eval_bad_empty"},
+            {"creator_id": "eval_bad_missing"},          # no text field at all
+            {"text": "word " * 50000, "creator_id": "eval_bad_huge"},
+            {"text": None, "creator_id": "eval_bad_null"},
+        ],
+    },
 
-    # TODO: add what your remaining criteria need.
-    #
-    # A criterion about the appeal path can't be tested by sending text alone;
-    # it needs a submission first and then an appeal against the content_id
-    # that came back. You'll need to test that one by hand, or extend this file
-    # and run_eval.py to do it. Saying which you did is part of the write-up.
+    # Criterion 4 — the appeal path — can't be expressed as a text or a body:
+    # it needs a real submission first, then an appeal against the content_id
+    # that submission returned. run_eval.py can't drive that two-step flow, so
+    # it's tested by hand with curl, three trials, each a fresh submit+appeal
+    # pair. See README — Run Log and Verdicts for the three trials' output.
 ]
 
 

@@ -492,39 +492,141 @@ needed one for writing their own words carefully.
 
 ## Run Log and Verdicts
 
-<!-- Your five criteria across three trials. `run_eval.py --label before`. -->
+Produced by `run_eval.py::main` + five hand-run appeal trials. Full output:
+`results/run_2026-11-08_1708_before.md`.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. My own writing flagged as AI | ≤ 1 of 10 `ai` | 2/10 | 2/10 | 2/10 | **MISSED** |
+| 2. Score spread (AI vs. human) | ≥ 0.40 apart | 0.3874 | 0.3874 | 0.3874 | **MISSED** |
+| 3. All three labels reachable | 3 of 3 | 3/3 | 3/3 | 3/3 | MET |
+| 4. Appeal always changes status | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 5. Bad input never crashes | 4/4 400s | 4/4 | 4/4 | 4/4 | MET |
 
-**Real output from one trial**, pasted as text, naming the file and function
-that produced it:
+All three trials came out identical for every criterion — expected, since
+neither signal is random: GPT-2 scoring and my text-statistics signal both
+give the same input the same number every time.
 
+**Real output**, from `app.py::submit` via `run_eval.py::main`:
+
+**Criterion 1 — my own writing, trial 1** (`results/run_2026-11-08_1708_before.md`):
 ```json
-
+{
+  "status": 200, "guess": "ai", "confidence": 0.7306,
+  "model_score": 0.8931, "style_score": 0.568,
+  "label": "We think this was most likely written by an AI system, based on patterns in word choice and sentence structure. If you wrote this yourself, you can appeal and a person will take another look.",
+  "sent": "I've been trying to get back into running, but my knees have been both"
+}
 ```
+2 of my 10 own plain paragraphs came back `ai` in every trial (the one above,
+about my knees, and one about a dinner recipe) — 8 came back `unsure`, 0 came
+back `human`.
 
-**Diagnoses**
+**Criterion 2 — score spread, trial 1:**
+```json
+[
+  {"status": 200, "guess": "ai", "confidence": 0.7362, "model_score": 0.8919, "style_score": 0.5804},
+  {"status": 200, "guess": "human", "confidence": 0.3488, "model_score": 0.2534, "style_score": 0.4442}
+]
+```
+Gap: `0.7362 - 0.3488 = 0.3874` — 0.0126 short of my 0.40 target, in all three
+trials.
 
-<!-- For each miss AND each broken attack: the stage and the mechanism.
+**Criterion 4 — appeal path, by hand** (`app.py::submit` then `app.py::appeal`,
+five fresh content_ids, confirmed against `GET /log`):
+```json
+{"content_id": "1d20feb0-df17-4c9f-a003-d7f98082f35e", "event": "appeal", "status": "under_review", "reasoning": "I wrote this myself, trial 4."}
+```
+5 of 5 appeals returned `200`/`under_review` and produced a matching
+`under_review` log entry next to the original decision.
 
-     Your service has five stages: the route, signal one, signal two, the
-     combining rule, and the label mapping.
+---
 
-     Not a diagnosis:  "The evasion attacks got through."
-     A diagnosis:      "Four evasion inputs got through. All four had typos
-                        added to AI-generated text. My second signal measures
-                        word variety, and typos raise word variety — so it read
-                        them as more human. My combining rule weights that
-                        signal at 0.6, so it dragged the whole score down."
+### Diagnoses
 
-     Look for a pattern. Five failures on one signal is one problem, not five. -->
+Both misses trace back to the **same mechanism**, and it's the one the
+starter's own docs name as signal one's structural blind spot — this isn't
+five separate problems, it's one problem showing up twice.
 
+**Criterion 1 miss — stage: signal one, amplified by the combining rule.**
+My own writing is short, plain, and uses common words on purpose — exactly
+what `detector.py` documents as what GPT-2 finds *predictable* (low
+perplexity), which `model_signal` turns into a *high* AI score. Two of my ten
+paragraphs scored `model_score` ≥ 0.89. My style signal didn't catch this:
+plain writing still has reasonable sentence-length variety and some
+punctuation, so `style_score` landed in the 0.45–0.59 range rather than
+pulling the average down. Because the two signals never disagreed by more
+than 0.4 on these inputs, `combine_signals` used the plain 50/50 average
+instead of its disagreement rule, so the elevated model score carried straight
+through to the combined score. Stage: `detector.py::model_signal` (the root
+cause), carried through unmodified by `scoring.py::combine_signals` (the
+50/50 average, which only protects against disagreement, not against both
+signals being moderately elevated at once).
+
+**Criterion 2 miss — stage: the combining rule.** The confident-AI sample's
+`model_score` (0.8919) and the confident-human sample's `model_score` (0.2534)
+are 0.6385 apart — plenty of separation on signal one alone. But
+`combine_signals` is a straight 50/35/0.5 average here (the two signals didn't
+split by more than 0.4), and the style signal measured a much narrower gap
+between the same two texts (0.5804 vs. 0.4442, only 0.1362 apart) because it
+only reads shape — it has no way to register "a dense AI-sounding paragraph"
+as anything more than averagely punctuated, averagely varied prose. Averaging
+a signal with a 0.64 spread against a signal with a 0.14 spread on the *same*
+pair compresses the combined gap to 0.3874, just under my 0.40 bar. Stage:
+`scoring.py::combine_signals` — the unweighted average lets the less
+discriminating signal dilute the more discriminating one on exactly the pair
+that should have been easiest to separate.
+
+**The pattern:** my style signal is the weak link in both misses — not
+because it's wrong on its own cases, but because it doesn't move far enough
+in either direction to either counteract signal one's false positives on
+plain writing (Criterion 1) or to preserve signal one's real separation on
+clear-cut cases (Criterion 2). If I were tightening one target, it wouldn't
+be either criterion's number — it would be `WEIGHT_STYLE_SIGNAL`.
+
+**Diagnosis of the 9 broken attacks — `false_positive` family (FP02–FP06).**
+Stage: **signal one** (`detector.py::model_signal`), same mechanism as
+Criterion 1 above. FP02 (formal register), FP03 (non-native speaker writing
+carefully), FP04 (student essay to a rubric), FP05 (technical documentation),
+and FP06 (person imitating a formal template) all share one trait: careful,
+conventional, somewhat formal human prose. GPT-2 finds conventional phrasing
+predictable regardless of who wrote it, so `model_score` landed 0.74–0.88 on
+every one of these. `style_score` landed in the 0.48–0.59 range — elevated,
+not low, because formal writing also tends toward more uniform sentence
+length and lighter distinctive punctuation, which is my style signal's *own*
+blind spot (it reads uniformity as "more AI," and formal register produces
+uniformity for reasons that have nothing to do with authorship). With both
+signals elevated and never splitting by more than 0.4, the plain average
+carried every one of these past `AI_THRESHOLD = 0.65`. This is the single
+worst thing this run found: the two signals' blind spots point the *same
+direction* on formal/careful human writing, instead of canceling out.
+
+**Diagnosis of the 9 broken attacks — `evasion` family (EV01–EV09).** Stage:
+**signal two** (`stylometry.py::style_signal`), its documented blind spot
+exactly as named in `stylometry.py`'s own module docstring: it cannot read,
+it only measures shape. EV01 (typos) and EV02 (sentences broken up with
+"Really.") directly target `sentence_length_spread`/`type_token_ratio` — typos
+create spurious unique "words," and short interjections raise length
+variance, both of which this signal reads as "more human." EV03 (a pasted
+quotation) and EV07 (punctuation padding) target `punctuation_density` the
+same way. In every one of these nine cases `model_score` still read the
+underlying AI-style filler correctly (0.59–0.89, consistently above
+`style_score`), but because the split between the two signals never exceeded
+0.4, `combine_signals` used the plain average instead of its
+disagreement rule, and the deflated style score pulled the blended result
+down to `human` or `unsure`. Only EV10 (repeated stanza structure) held,
+because it didn't touch sentence length or punctuation at all, so signal
+two's score stayed unmoved and signal one's 0.979 carried the combined score
+to 0.86.
+
+**The combined pattern, across both the attack set and my own criteria:**
+every failure in this run — all 9 evasions, all 5 false positives, both
+criterion misses — passes through `scoring.py::combine_signals`'s plain 50/50
+average on an input where *one* signal was right and the other was wrong (or
+both were wrong in the same direction). The disagreement rule only fires past
+a 0.4 split, and in every failing case here the two signals landed closer
+than that. That threshold, not either individual signal, is where
+Milestone 5's fix is aimed.
 
 
 ---

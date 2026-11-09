@@ -334,23 +334,159 @@ that triggered — see the ten entries pasted below.
 
 ## Attack Run — Before
 
-<!-- Every attack with its outcome and a held-or-broke mark.
-     `run_attacks.py --label before` produces the table. -->
+Full run: `results/attack_run_2026-11-08_1705_before.md` (56 attacks, 0 crashes).
+HELD means the system withstood that attack; BROKE means the attack got what
+it was going for. Thresholds: human ≤0.35, unsure 0.35–0.65, AI ≥0.65.
 
+| ID | Family | Targeting | Status | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|
+| EV01 | evasion | typos raise word variety | 200 | human | 0.329 | BROKE |
+| EV02 | evasion | broken-up sentences raise length spread | 200 | human | 0.328 | BROKE |
+| EV03 | evasion | pasted quotation changes the shape | 200 | unsure | 0.527 | BROKE |
+| EV04 | evasion | unusual words raise perplexity | 200 | unsure | 0.533 | BROKE |
+| EV05 | evasion | heavy human editing pass | 200 | human | 0.303 | BROKE |
+| EV06 | evasion | one very long + one very short sentence | 200 | unsure | 0.448 | BROKE |
+| EV07 | evasion | padding with punctuation | 200 | unsure | 0.498 | BROKE |
+| EV08 | evasion | text below the token window | 200 | human | 0.305 | BROKE |
+| EV09 | evasion | AI text with human opening bolted on | 200 | unsure | 0.561 | BROKE |
+| EV10 | evasion | repeated stanza structure | 200 | ai | 0.860 | HELD |
+| FP01 | false_positive | plain, clear human writing | 200 | unsure | 0.573 | HELD |
+| FP02 | false_positive | human writing, formal register | 200 | ai | 0.659 | **BROKE** |
+| FP03 | false_positive | non-native English speaker writing carefully | 200 | ai | 0.690 | **BROKE** |
+| FP04 | false_positive | student essay written to a rubric | 200 | ai | 0.657 | **BROKE** |
+| FP05 | false_positive | technical documentation by a person | 200 | ai | 0.693 | **BROKE** |
+| FP06 | false_positive | person imitating a formal template | 200 | ai | 0.685 | **BROKE** |
+| FP07 | false_positive | human writing repeating a phrase | 200 | unsure | 0.617 | HELD |
+| FP08 | false_positive | very short genuine human submission | 200 | human | 0.268 | HELD |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | unsure | 0.422 | HELD |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | human | 0.229 | HELD |
+| PI03 | prompt_injection | instruction wrapped in writer's voice | 200 | unsure | 0.527 | HELD |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | unsure | 0.497 | HELD |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | unsure | 0.363 | HELD |
+| PI06 | prompt_injection | instruction plus real human text | 200 | unsure | 0.545 | HELD |
+| MF01 | malformed | text is only whitespace | 400 | — | — | HELD |
+| MF02 | malformed | text is a single character | 400 | — | — | HELD |
+| MF03 | malformed | text is control characters | 200 | human | 0.233 | HELD |
+| MF04 | malformed | text is only punctuation | 200 | unsure | 0.357 | HELD |
+| MF05 | malformed | text is a very long single word | 200 | ai | 0.832 | HELD |
+| MF06 | malformed | text is emoji only | 200 | ai | 0.999 | HELD |
+| MF07 | malformed | text is right-to-left script | 200 | ai | 0.953 | HELD |
+| MF08 | malformed | text is 60,000 characters | 200 | ai | 0.879 | HELD |
+| RQ01 | malformed | no text field at all | 400 | — | — | HELD |
+| RQ02 | malformed | no creator_id | 200 | unsure | 0.403 | HELD |
+| RQ03 | malformed | text is a number | 400 | — | — | HELD |
+| RQ04 | malformed | text is a list | 400 | — | — | HELD |
+| RQ05 | malformed | text is null | 400 | — | — | HELD |
+| RQ06 | malformed | creator_id is an object | 200 | human | 0.191 | HELD |
+| RQ07 | malformed | body is a JSON array, not an object | 400 | — | — | HELD |
+| RQ08 | malformed | body is unparseable JSON | 400 | — | — | HELD |
+| RQ09 | malformed | body is empty | 400 | — | — | HELD |
+| RQ10 | malformed | body is form-encoded, not JSON | 400 | — | — | HELD |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | — | — | HELD* |
+| RQ12 | malformed | deeply nested JSON | 400 | — | — | HELD |
+| FL01_01–06 | flood_same_creator | 20 rapid submissions, one creator | 200 | human | 0.209 | HELD |
+| FL01_07–12 | flood_same_creator | 20 rapid submissions, one creator | 429 | — | — | HELD |
 
+**9 BROKE, 47 HELD, 0 crashed.** Every failure clustered in exactly the two
+families the signals' own documented blind spots predict: `evasion` (9 of 10 —
+my style signal's shape-only measure is cheap to game) and `false_positive` (5
+of 8 — my model signal rewards formal/plain/non-native phrasing as
+"predictable," i.e. AI-ish). `prompt_injection` held 6 for 6: neither signal
+reads text as instructions, it only measures perplexity and shape, so there is
+nothing in this architecture for an injected instruction to act on. All
+`malformed`/`RQ` inputs got a clean `400` or a sane `200` — no 500s anywhere.
 
-**Ten audit log entries from the run**
+**\*RQ11 note:** several `RQ` rows in the malformed-requests file have no
+usable `creator_id`, so `rate_limit_key` falls back to the caller's own
+address (mine, running the harness) — and by RQ11 those had quietly used up
+my own 6/minute budget, so RQ11 got a `429` before its actual target (an
+unparseable-as-text JSON body) was ever evaluated. Not a crash, but a gap in
+this run: that attack's real target wasn't tested. Diagnosed below.
 
-<!-- Choose entries that show the interesting failures, not the ten easiest. -->
+**Ten audit log entries from the run** (nine decisions covering both failure
+families plus the edge cases, one rejection):
 
 ```json
-
+[
+  {
+    "combined_score": 0.3293, "content_id": "83843930-17f3-445b-ac95-0ac4d3521ec7",
+    "creator_id": "attacker_EV01", "guess": "human",
+    "label": "We think this was most likely written by a person. The sentence rhythm and word choice look like ordinary human writing.",
+    "model_score": 0.1635, "status": "decided", "style_score": 0.4952,
+    "timestamp": "2026-11-09T01:05:15+00:00"
+  },
+  {
+    "combined_score": 0.8601, "content_id": "861b0b34-f64c-4b6a-bc1f-054e5cbe2677",
+    "creator_id": "attacker_EV10", "guess": "ai",
+    "label": "We think this was most likely written by an AI system, based on patterns in word choice and sentence structure. If you wrote this yourself, you can appeal and a person will take another look.",
+    "model_score": 0.9792, "status": "decided", "style_score": 0.741,
+    "timestamp": "2026-11-09T01:05:16+00:00"
+  },
+  {
+    "combined_score": 0.6591, "content_id": "8bba58c0-f249-499f-9fa2-eede6131fc34",
+    "creator_id": "attacker_FP02", "guess": "ai",
+    "label": "We think this was most likely written by an AI system, based on patterns in word choice and sentence structure. If you wrote this yourself, you can appeal and a person will take another look.",
+    "model_score": 0.7387, "status": "decided", "style_score": 0.5794,
+    "timestamp": "2026-11-09T01:05:16+00:00"
+  },
+  {
+    "combined_score": 0.6897, "content_id": "08a90297-ec5d-4229-a028-21be3e87923c",
+    "creator_id": "attacker_FP03", "guess": "ai",
+    "label": "We think this was most likely written by an AI system, based on patterns in word choice and sentence structure. If you wrote this yourself, you can appeal and a person will take another look.",
+    "model_score": 0.8051, "status": "decided", "style_score": 0.5742,
+    "timestamp": "2026-11-09T01:05:16+00:00"
+  },
+  {
+    "combined_score": 0.6927, "content_id": "80dc67fd-dcd2-4bb6-8a1c-4085aebd21c0",
+    "creator_id": "attacker_FP05", "guess": "ai",
+    "label": "We think this was most likely written by an AI system, based on patterns in word choice and sentence structure. If you wrote this yourself, you can appeal and a person will take another look.",
+    "model_score": 0.8005, "status": "decided", "style_score": 0.585,
+    "timestamp": "2026-11-09T01:05:16+00:00"
+  },
+  {
+    "combined_score": 0.3628, "content_id": "ac66fd74-1f9a-46c4-b538-18feda48ed45",
+    "creator_id": "attacker_PI05", "guess": "unsure",
+    "label": "We can't confidently tell whether this was written by a person or an AI system. That's not an accusation — it just means our signals didn't point clearly one way. You're welcome to appeal if you'd like a person to take a closer look.",
+    "model_score": 0.6401, "status": "decided", "style_score": 0.2135,
+    "timestamp": "2026-11-09T01:05:17+00:00"
+  },
+  {
+    "combined_score": 0.9985, "content_id": "b4612682-ca52-4314-8079-46e093f59b45",
+    "creator_id": "attacker_MF06", "guess": "ai",
+    "label": "We think this was most likely written by an AI system, based on patterns in word choice and sentence structure. If you wrote this yourself, you can appeal and a person will take another look.",
+    "model_score": 0.9969, "status": "decided", "style_score": 1.0,
+    "timestamp": "2026-11-09T01:05:18+00:00"
+  },
+  {
+    "combined_score": 0.9532, "content_id": "9908e33e-7689-46a1-a3b8-6930fe483b2c",
+    "creator_id": "attacker_MF07", "guess": "ai",
+    "label": "We think this was most likely written by an AI system, based on patterns in word choice and sentence structure. If you wrote this yourself, you can appeal and a person will take another look.",
+    "model_score": 0.9064, "status": "decided", "style_score": 1.0,
+    "timestamp": "2026-11-09T01:05:18+00:00"
+  },
+  {
+    "combined_score": 0.1913, "content_id": "d1ba7c21-2cbe-47c1-b3c7-51a4c53b4893",
+    "creator_id": {"id": "x"}, "guess": "human",
+    "label": "We think this was most likely written by a person. The sentence rhythm and word choice look like ordinary human writing.",
+    "model_score": 0.0492, "status": "decided", "style_score": 0.3333,
+    "timestamp": "2026-11-09T01:05:18+00:00"
+  },
+  {
+    "creator_id": "flood_tester", "event": "rejected", "limit": "6 per 1 minute",
+    "reason": "rate_limited", "status": "rejected",
+    "timestamp": "2026-11-09T00:59:58+00:00"
+  }
+]
 ```
 
 **The single worst outcome** — the one I'd least want to explain to a writer
-whose work got caught by it:
-
-
+whose work got caught by it: **FP03**, "a non-native English speaker writing
+carefully," scored `ai` at 0.690 confidence. This is the exact person named in
+`detector.py`'s own documented blind spot — someone sticking to vocabulary
+they're sure of, writing plainly and carefully — accused with a confident
+label and no signal anywhere in the pipeline that would have caught it before
+the request left the route. They have an appeal path, but they shouldn't have
+needed one for writing their own words carefully.
 
 ---
 

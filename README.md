@@ -287,6 +287,43 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
   sentence, so the writer isn't left to guess what "flagged" means or what to
   do about it.
 
+**Moment 3 (Unit 8)**
+
+- *What I asked for:* I used Claude Code to run the service, turn on rate
+  limiting, run the full attack set and my own `run_eval.py` criteria (before
+  and after my improvement), and to draft the diagnosis of each miss and
+  broken attack from the raw scores, before I reviewed it.
+- *What came back:* A worked diagnosis tracing both criterion misses and all
+  14 broken attacks to two named mechanisms — signal one's low-perplexity
+  blind spot on plain/formal writing, and signal two's shape-only blind spot
+  on evasion — and a recommendation to fix the threshold rather than a
+  weight, because reweighting either signal helps one failure mode while
+  worsening the other (confirmed by checking the actual scores in both
+  directions).
+- *What I changed:* I'm disclosing this directly rather than rewriting the
+  diagnosis to read as entirely my own derivation: Claude Code executed the
+  milestones and drafted the stage/mechanism reasoning from the data; I
+  reviewed it against the actual run output in `results/` before accepting
+  it, and the honest-regression call on Criterion 3 (not quietly swapping in
+  a better calibration text after seeing the after-results) was a deliberate
+  choice to keep, not something I asked it to soften.
+
+**Moment 4 (Unit 8)**
+
+- *What I asked for:* Per the unit's own suggested prompt, I asked Claude to
+  argue that my `AI_THRESHOLD` change was the wrong fix — as strongly as
+  possible — and name what evidence would settle it.
+- *What came back:* The strongest case against it: raising the threshold is a
+  measurement choice dressed up as a fix, and it did nothing for the
+  `evasion` family or Criterion 2, so "9 broken attacks remain" is a fair
+  characterization of how little this one change actually solved. The
+  evidence that would settle it either way: whether the raw `confidence`
+  scores were truly unchanged (not just the labels) — which I checked and
+  confirmed above.
+- *What I changed:* I kept the threshold change, but it's why **What's Still
+  Broken** above is explicit that this fixed one of two failure families and
+  left the other — and the score-spread miss — completely untouched.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
@@ -696,16 +733,55 @@ real AI text. See **What's Still Broken** for where I'd go from here.
 
 ## What's Still Broken
 
-<!-- For each attack still getting through and each criterion still missed:
-     what you'd do, and why you stopped. -->
+**The 9 `evasion` attacks (EV01–EV09).** Untouched by this unit's improvement
+— they target `stylometry.py::style_signal`'s shape-only blind spot, not the
+label threshold. What I'd do: make `sentence_length_spread`,
+`type_token_ratio`, and `punctuation_density` robust to the cheap tricks that
+beat them (typos, forced sentence breaks, punctuation padding) — e.g. a
+lightweight spell-normalization pass before tokenizing, so typos stop
+inflating vocabulary variety. Why I stopped: that's a second system change on
+top of my one allowed improvement this unit, and the rule is explicit that
+only one change gets measured — bundling a second one in would make this
+unit's before/after comparison meaningless.
 
+**Criterion 2 — score spread (0.3874, 0.0126 short of 0.40).** Unchanged by
+the threshold move, since `combine_signals`'s raw output didn't change. What
+I'd do: per my diagnosis, the fix isn't a weight (I checked — shifting weight
+toward either signal helps this gap but reopens Criterion 1's false-positive
+problem, since the two failures pull in opposite directions on the same
+knob). It needs a genuinely more discriminating style signal, which is the
+same fix as the evasion attacks above. Why I stopped: same reason — one
+change this unit, and it's already spent.
 
+**Criterion 3 — label coverage regressed from MET to MISSED.** My own
+"confidently AI" calibration text (0.7362) now falls under the new 0.75 bar.
+What I'd do: swap in a more extreme calibration text for this criterion
+(the attack set shows 0.83–0.999 is easy to reach with blunter AI-style
+filler) so the `ai` label is demonstrated reachable again. Why I stopped:
+I noticed this only after running `--label after`, and changing my test input
+at that point — after seeing which one would make the number look better —
+is exactly the kind of after-the-fact criterion-softening `criteria.md`
+warns against. I'd rather report the regression honestly next time than fix
+it quietly.
 
-**The trade I'd make if this ran for real:**
+**RQ11's untested target.** Several malformed-request rows have no usable
+`creator_id` and fall back to my own harness address for rate limiting, so by
+RQ11 that shared bucket had already hit its cap — the request got a `429`
+before its actual target (an unparseable-as-text body) was ever evaluated.
+What I'd do: give `run_attacks.py` a way to exempt malformed-request rows
+from the flood's own rate-limit bucket, or reset the limiter between runs.
+Why I stopped: this is a gap in the *test harness's* interaction with the
+limiter, not a defect in the service being tested, and it's outside this
+unit's one-change budget.
 
-<!-- Two sentences. Fewer wrong accusations means more AI text getting through.
-     Say which way you'd go and WHO PAYS FOR IT. -->
-
+**The trade I'd make if this ran for real:** I'd keep the wider unsure band
+and accept more AI text reading as merely "unsure" rather than tighten it
+back and risk re-confidently-accusing writers like FP03 and FP05 — a
+real person wrongly told their own careful writing is AI pays a direct,
+personal cost (distrust, the burden of appealing), while a missed AI
+submission costs the platform a small, diffuse amount spread across many
+submissions nobody can point to. Concretely: writers pay less under this
+system, and the platform's confident-detection rate pays for it.
 
 
 <!-- ═════════════════════════════════════════════════════════════════════

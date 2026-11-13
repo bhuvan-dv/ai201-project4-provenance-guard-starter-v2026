@@ -817,6 +817,26 @@ system, and the platform's confident-detection rate pays for it.
      Do not delete and recreate this repository.
      ═════════════════════════════════════════════════════════════════════ -->
 
+<!-- ═════════════════════════════════════════════════════════════════════
+
+     SUBMISSION CHECKLIST — unit 9 (capstone)
+
+       [ ] criteria.md has five fresh numbered criteria, each naming a target
+       [ ] At least three of the five test the extension, not the original system
+       [ ] RUNNING.md names Path A or Path B and gives a reader a full path
+       [ ] Structured logging extended with duration_ms, on decisions AND rejections
+       [ ] A measured (not estimated) cost-per-run number, with the hundred-a-day math
+       [ ] Ten log entries pasted, plus at least one failed run
+       [ ] criteria.md committed before any results, both commits named in their messages
+       [ ] Five criteria across three trials, in the required table format
+       [ ] One improvement, diagnosis-driven, with both result sets side by side
+       [ ] What's Still Broken — a tightened target if all five were met
+       [ ] At least eight new commits this unit
+       [ ] The SAME repository URL as units 7 and 8
+
+     Do not delete and recreate this repository.
+     ═════════════════════════════════════════════════════════════════════ -->
+
 ---
 
 ## Capstone

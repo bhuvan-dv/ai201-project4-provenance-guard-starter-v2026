@@ -306,3 +306,35 @@ is evidence, and the entries you paste into your README are what unit 8 grades.
 
 **Do not delete and recreate this repository.** You submit the same URL both
 units.
+
+---
+
+## Capstone (Unit 9) — same run path, Path B
+
+The capstone extension (the `phrasing.py` signal) needs nothing new. The run
+path above is unchanged and was re-verified from a clean checkout for this
+unit:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+- **Python:** 3.11, 3.12, or 3.13 (not 3.14 — see `requirements.txt`).
+- **Dependencies:** pinned in `requirements.txt` — Flask, Flask-Limiter,
+  `requests`, `transformers`, `torch` (CPU-only build is fine), `gunicorn`
+  (unused locally; it's there for a hosted deploy, not required for Path B),
+  `certifi`.
+- **Model file:** `gpt2` via `transformers`, downloaded automatically on
+  first use into the Hugging Face cache (`~/.cache/huggingface`) — about
+  **550 MB** on disk, and the process holds roughly that much in memory once
+  loaded. This is the reason this unit runs **Path B (local, with a logged
+  run record)** rather than a hosted free-tier URL: free hosting tiers this
+  course uses cap around 512 MB of memory, which the loaded model alone is
+  already close to or over.
+- **Start command:** `python app.py` — prints the host/port, whether rate
+  limiting is on, and the audit log path.
+- **Run record:** `logs/audit.jsonl`, committed to this repository (see
+  **Instrumentation** in the README for a pasted extract).

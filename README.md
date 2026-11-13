@@ -819,4 +819,252 @@ system, and the platform's confident-detection rate pays for it.
 
 ---
 
+## Capstone
+
+<!-- Unit 9. Everything below is new this unit — the unit 7/8 sections above
+     are untouched. Six deliverables: criteria.md (fresh five, in git
+     history alongside the originals), RUNNING.md (updated with a Capstone
+     note), and the nine README sections below. -->
+
+**What This Extends**
+
+This extends **Provenance Guard** (unit 7/8's two-signal detector +
+rate-limiting + attack-hardened audit log). What's new this unit: a third
+detection signal, `phrasing.py`, measuring the density of generic AI
+transition/hedge phrases ("furthermore", "in conclusion", "it is important
+to note") — a blind spot neither the model signal (token predictability) nor
+the style signal (sentence shape) reads for. It's wired into
+`scoring.py::combine_signals` as a third weighted input, and the audit log
+and `/submit` response both carry the new `phrasing_score`. Instrumentation
+(`duration_ms`, on every decision and every rejection) is also new this unit.
+
+**The Shape**
+
+**Shape C — extend one capability.** The one new capability is the phrasing
+signal described above.
+
+Out of scope, decided before building: I'm not touching the model signal or
+the stylometry signal's own math, I'm not adding a fourth signal, and I'm not
+changing the rate-limiting numbers from unit 8. The combining rule in
+`combine_signals` had to change to accept a third input, but its philosophy
+(weighted average, with a benefit-of-the-doubt lean toward the most
+human-reading signal on a sharp disagreement) is the same rule unit 7 wrote,
+extended rather than replaced.
+
+**Running It**
+
+**Path B — local, with a logged run record.** `gpt2` loads in-process and
+holds roughly 550 MB in memory once loaded — too tight for the free hosting
+tier's ~512 MB cap, so this runs locally. Full instructions, the exact
+Python/dependency/model requirements, and the start command are in
+[RUNNING.md](RUNNING.md) under its new **Capstone (Unit 9)** section. The
+instructions were re-verified this unit by cloning the committed repository
+into a clean directory and running `python3 -m venv .venv`, `pip install -r
+requirements.txt`, `python test.py`, and `python app.py` with nothing else —
+all nine `test.py` checks passed and `/submit` answered a real request.
+
+**Instrumentation**
+
+Every `/submit` call writes one JSON record to `logs/audit.jsonl` with (at
+minimum): `timestamp`, `creator_id`, `guess`/`label` (the output), the three
+raw signal scores (`model_score`, `style_score`, `phrasing_score`), the
+combined `confidence`, `status`, and — new this unit — `duration_ms`,
+timed around the whole pipeline from payload parsing through the logged
+decision. Rejections (`/submit` calls with missing, empty, or oversized
+`text`) write a separate `event: "rejected"` record, also carrying
+`duration_ms`, so a rejected request leaves exactly as much of a trace as a
+decided one.
+
+Ten real entries, pasted as text (clearly-AI, clearly-human, the formal-memo
+diagnostic case discussed below, and a second AI/human pair), plus one
+rejection:
+
+```json
+{"combined_score": 0.8132, "content_id": "837d15f2-3715-42d8-a0db-87f327cfa715", "creator_id": "readme_demo_ai", "duration_ms": 124.9, "guess": "ai", "input_length": 261, "label": "We think this was most likely written by an AI system, based on patterns in word choice and sentence structure. If you wrote this yourself, you can appeal and a person will take another look.", "model_score": 0.8785, "phrasing_score": 1.0, "status": "decided", "style_score": 0.6052, "timestamp": "2026-11-13T23:12:06+00:00"}
+{"combined_score": 0.2675, "content_id": "7acee07d-6220-4155-8163-c29338a30433", "creator_id": "readme_demo_human", "duration_ms": 60.0, "guess": "human", "input_length": 224, "label": "We think this was most likely written by a person. The sentence rhythm and word choice look like ordinary human writing.", "model_score": 0.6209, "phrasing_score": 0.0, "status": "decided", "style_score": 0.4776, "timestamp": "2026-11-13T23:12:06+00:00"}
+{"combined_score": 0.4809, "content_id": "a58e3bc5-2ed7-44dd-bccf-ff6ff056b578", "creator_id": "readme_demo_formal_human", "duration_ms": 58.6, "guess": "unsure", "input_length": 338, "label": "We can't confidently tell whether this was written by a person or an AI system. That's not an accusation — it just means our signals didn't point clearly one way. You're welcome to appeal if you'd like a person to take a closer look.", "model_score": 0.5784, "phrasing_score": 0.3333, "status": "decided", "style_score": 0.4749, "timestamp": "2026-11-13T23:12:06+00:00"}
+{"combined_score": 0.6462, "content_id": "ec317b6a-7654-4818-bf92-f8d6a9549651", "creator_id": "readme_demo_ai2", "duration_ms": 41.2, "guess": "unsure", "input_length": 146, "label": "We can't confidently tell whether this was written by a person or an AI system. That's not an accusation — it just means our signals didn't point clearly one way. You're welcome to appeal if you'd like a person to take a closer look.", "model_score": 0.8073, "phrasing_score": 1.0, "status": "decided", "style_score": 0.408, "timestamp": "2026-11-13T23:12:06+00:00"}
+{"combined_score": 0.2172, "content_id": "19c8d2ae-58a8-466e-a752-9a89e9fc61a4", "creator_id": "readme_demo_human2", "duration_ms": 42.5, "guess": "human", "input_length": 133, "label": "We think this was most likely written by a person. The sentence rhythm and word choice look like ordinary human writing.", "model_score": 0.3314, "phrasing_score": 0.0, "status": "decided", "style_score": 0.5887, "timestamp": "2026-11-13T23:12:06+00:00"}
+{"combined_score": 0.1133, "content_id": "b1e03ac0-729c-4a32-9098-a7be12dfe368", "creator_id": "cap_c34_trial3_0_aeeedb", "duration_ms": 37.7, "guess": "human", "input_length": 119, "label": "We think this was most likely written by a person. The sentence rhythm and word choice look like ordinary human writing.", "model_score": 0.0111, "phrasing_score": 0.0, "status": "decided", "style_score": 0.5497, "timestamp": "2026-11-13T23:11:22+00:00"}
+{"combined_score": 0.1143, "content_id": "070a7867-c7e5-4874-a067-26278eeb646c", "creator_id": "cap_c34_trial3_1_ad5686", "duration_ms": 36.7, "guess": "human", "input_length": 119, "label": "We think this was most likely written by a person. The sentence rhythm and word choice look like ordinary human writing.", "model_score": 0.0147, "phrasing_score": 0.0, "status": "decided", "style_score": 0.5497, "timestamp": "2026-11-13T23:11:22+00:00"}
+{"combined_score": 0.114, "content_id": "5068f52b-6597-435b-926e-860220b32ff3", "creator_id": "cap_c34_trial3_2_cf88a7", "duration_ms": 42.1, "guess": "human", "input_length": 119, "label": "We think this was most likely written by a person. The sentence rhythm and word choice look like ordinary human writing.", "model_score": 0.0136, "phrasing_score": 0.0, "status": "decided", "style_score": 0.5497, "timestamp": "2026-11-13T23:11:22+00:00"}
+{"combined_score": 0.1171, "content_id": "46a0cfde-cb9d-4a82-a70d-559c449330ff", "creator_id": "cap_c34_trial3_3_4fc37b", "duration_ms": 36.8, "guess": "human", "input_length": 119, "label": "We think this was most likely written by a person. The sentence rhythm and word choice look like ordinary human writing.", "model_score": 0.012, "phrasing_score": 0.0, "status": "decided", "style_score": 0.5673, "timestamp": "2026-11-13T23:11:23+00:00"}
+{"combined_score": 0.1136, "content_id": "fd2ee0c0-0b9a-496e-a46f-f23e672c53b0", "creator_id": "cap_c34_trial3_4_129593", "duration_ms": 36.6, "guess": "human", "input_length": 119, "label": "We think this was most likely written by a person. The sentence rhythm and word choice look like ordinary human writing.", "model_score": 0.0121, "phrasing_score": 0.0, "status": "decided", "style_score": 0.5497, "timestamp": "2026-11-13T23:11:23+00:00"}
+{"creator_id": "readme_demo_reject", "duration_ms": 0.0, "event": "rejected", "reason": "missing_text", "status": "rejected", "timestamp": "2026-11-13T23:12:06+00:00"}
+```
+
+(`app.py::submit` produces every `decided` line above; the rejection comes
+from the `text.strip()` check in the same function, logged via
+`audit.log_rejection`. I tested the failure path deliberately — missing
+text, empty text, oversized text — and all three produce a logged
+rejection; see **Run Log and Verdicts**, criterion 5.)
+
+**What It Costs**
+
+This service has no API spend — it runs `gpt2` locally, so its real cost is
+CPU time. Measured directly from logged `duration_ms` values across 10 warm
+requests, repeated three times (criterion 4 below): **36.4ms, 38.8ms,
+37.0ms** average — call it **~37ms per run** (0.037 CPU-seconds), excluding
+the one-time ~6s model load that happens once per process start, not per
+request.
+
+**Arithmetic for a hundred requests a day:** 100 runs × 0.037s = **3.7
+CPU-seconds/day**. Pricing that against a small always-on cloud instance
+(AWS `t3.micro` on-demand, ≈$0.0104/hour ≈ $0.00000289/second):
+3.7s × $0.00000289/s ≈ **$0.0000107/day** (≈$0.0032/year) — the compute cost
+of this service at that volume rounds to free; the real constraint at scale
+is the ~550 MB of memory the model holds open the whole time the process is
+alive, not the per-run CPU time.
+
+**Run Log and Verdicts**
+
+Three trials, run against the live local service, each trial a batch
+against the sizes each criterion names (10 submissions for 1-4, 5 per bad-
+input case for 5):
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Phrasing signal fires on templated text | ≥0.9 score, 9/10 | 10/10 | 10/10 | 10/10 | MET |
+| 2. Phrasing signal quiet on plain writing | ≤0.1 score, 9/10 | 10/10 | 10/10 | 10/10 | MET |
+| 3. Warm `/submit` under 200ms | 9/10 | 10/10 | 10/10 | 10/10 | MET |
+| 4. Average cost per run under 150ms | avg < 150ms | 36.4ms | 38.8ms | 37.0ms | MET |
+| 5. Bad input never crashes, rejection is timed | 5/5 per case | 5/5/5 | 5/5/5 | 5/5/5 | MET |
+
+(Row 5's three numbers per cell are missing-text/empty-text/oversized-text,
+in that order — all three cases hit 5/5 in every trial.)
+
+Real output underneath, from `scoring.combine_signals` via `app.py::submit`
+(trial 1, criterion 1, first item — a heavily templated paragraph) and
+criterion 5 (trial 1, first item of each bad-input case):
+
+```json
+// criterion 1, trial 1, item 0 — templated text
+{"confidence": 0.8132, "guess": "ai", "model_score": 0.8785, "phrasing_score": 1.0, "style_score": 0.6052}
+
+// criterion 5, trial 1 — missing text
+HTTP 400 {"error": "bad_request", "message": "`text` is required and must be a non-empty string."}
+// criterion 5, trial 1 — empty text
+HTTP 400 {"error": "bad_request", "message": "`text` is required and must be a non-empty string."}
+// criterion 5, trial 1 — oversized text (120,000 chars)
+HTTP 400 {"error": "bad_request", "message": "`text` is too long (max 100000 characters)."}
+```
+
+All five criteria MET across all three trials — which is itself worth being
+honest about. None of the five is loose on paper (criteria 1/2 sit right at
+the signal's own ceiling/floor, criterion 4 has roughly 4x headroom), but a
+clean sweep with no diagnosed misses meant the real diagnostic work this
+unit had to come from testing *beyond* the five numbered criteria — see
+below.
+
+**The Improvement**
+
+None of the five numbered criteria caught this, because none of them tested
+a *short* submission containing a *legitimate, occasional* use of a
+transition phrase — exactly the blind spot `phrasing.py`'s own docstring
+names ("it rewards exactly the register that academic and business writing
+already uses on purpose"). I went looking for that blind spot directly:
+
+> **Diagnostic input** (a short, plausible internal memo, not AI-generated):
+> *"The committee met twice last month to review the budget shortfall.
+> Furthermore, several members raised concerns about the timeline, which
+> has slipped three weeks already and nobody seems happy about it. It
+> should be noted that the vendor contract expires in June, so a decision
+> is needed soon or we lose our negotiating position entirely."* (~55 words,
+> 2 legitimate phrase hits.)
+
+**Before:** `phrasing_score: 0.9091`, `model_score: 0.5784`,
+`style_score: 0.4749`, combined **0.5928** → `unsure`.
+
+**The mechanism:** `phrasing_signal`'s density formula was
+`phrase_count / (word_count / 100)`. On a 55-word text, that denominator is
+0.55 — so 2 real hits, at this text's actual length, inflate to a density of
+~3.6 phrases-per-100-words, nearly saturating the signal's own 4.0 ceiling.
+The signal was never built to be graded on a curve this steep for short
+text; it's a per-100-word rate that was never tested below ~100 words.
+
+**The change:** floor the normalizing word count at 150
+(`phrasing.py::phrasing_signal`) — `density = phrase_count / (max(word_count,
+150) / 100)`. A short text now needs the same *absolute* number of hits a
+longer templated passage would, instead of getting penalized for being
+short.
+
+**After:** `phrasing_score: 0.3333`, model/style scores unchanged, combined
+**0.4809** → still `unsure` (the model signal alone, 0.5784, already sits
+past `unsure`'s midpoint, so the label doesn't flip on this exact input) —
+but the phrasing contribution to that score dropped by nearly two-thirds,
+and the service is no longer one legitimate "furthermore" away from treating
+a short memo as heavily templated.
+
+**Did it help, and what did it cost elsewhere?** I re-ran the full three-
+trial criteria set after the change (identical table above, all MET, all
+near-identical numbers — see the two raw trial runs: before-fix
+`phrasing_score: 1.0` on templated text / after-fix `phrasing_score: 1.0` on
+the same text, unchanged). So the fix removed the short-text false-positive
+pressure without weakening the signal's ability to catch actually-templated
+text — the heavily templated calibration texts used in criteria 1/2 all
+exceed even the new 150-word floor in hit density, so they still saturate.
+I didn't find a case where the floor caused a miss on genuinely templated
+*short* AI text (e.g., a two-sentence AI reply packed with transitions) —
+that's a real remaining limitation, named below.
+
+**What's Still Broken**
+
+All five criteria were met, so by the brief's own rule this section names
+which target I'd tighten rather than a miss I ran out of time on:
+
+**The target I'd tighten:** criterion 4 (cost per run). I set <150ms and
+measured ~37ms — about 4x margin, which is loose given the real distribution
+observed (36.4-38.8ms across trials, never close to 100ms on a warm
+request). I'd tighten it to **average < 60ms, 9/10 individual requests under
+80ms**, which still clears the observed numbers with real but honest margin
+rather than a target nothing could plausibly miss.
+
+**A real limitation the improvement didn't fix:** the 150-word floor removes
+the short-*honest*-text false positive, but it also means a short submission
+that genuinely is dense AI filler (two or three sentences, several
+transition phrases) now scores lower on phrasing than it would have before
+the fix — the same floor that protects the memo also mutes the signal on
+short-and-actually-templated text. I didn't have a case in this unit's test
+inputs that exposed this, but I'm confident it exists given how the floor
+is constructed, and I'd want calibration text specifically in that gap (30-80
+words, deliberately templated) before trusting the signal there.
+
+**The one thing I'd do first with another unit:** build that short-and-
+templated calibration set and re-tune the floor (or scale it down smoothly
+instead of a hard cutoff at 150) against it, rather than any other open
+item — because the floor is the thing I just changed on faith that it
+wouldn't create a new blind spot in the other direction, and I don't
+actually know yet whether it did.
+
+**How I Used AI**
+
+**Moment one — choosing what to extend.** Before building anything, I asked
+Claude to compare all four of my existing AI201 projects (the RAG guide, the
+agent-based shopping assistant, the movie-comment classifier, and
+Provenance Guard) against this unit's actual constraints — bounded to ~90
+minutes, needs a clean extension seam, needs to support a measurable cost
+and structured logging. It came back with a structured per-project
+comparison (completeness, local-model-vs-API, existing instrumentation,
+a concrete extension point for each) and a specific recommendation:
+Provenance Guard, because it already had structured JSONL logging and a
+clean two-signal scoring seam. I used that recommendation directly rather
+than picking by instinct — it's also why I knew up front this had to be
+Path B, since the comparison flagged the local GPT-2 model's ~550 MB memory
+footprint against the free hosting tier's ~512 MB cap before I'd written a
+line of code.
+
+**Moment two — finding the bug, not just building the feature.** After
+wiring up the phrasing signal and getting all five criteria to pass cleanly
+on the first try, I asked Claude to specifically probe the blind spot the
+signal's own docstring claims it has (legitimate formal writing scoring high)
+rather than stopping at "all criteria met." That probe is what surfaced the
+short-text amplification bug — a real defect none of the five numbered
+criteria would ever have caught, since none of them used a short, lightly-
+phrased, genuinely human input. I reviewed the diagnosis (the denominator
+math) and the fix (the 150-word floor) before accepting either, and asked
+for the before/after re-run to confirm the fix didn't quietly break
+criterion 1's reachability on the existing templated calibration text.
+
+---
+
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**

@@ -82,12 +82,22 @@ def phrasing_signal(text: str) -> float:
     the same habit score the same. Four hits per 100 words is already a
     heavily templated paragraph, so that's the ceiling — anything at or above
     it clips to 1.0 rather than letting one outlier dominate.
+
+    The word count used for normalization is floored at 150. Without the
+    floor, a 60-word submission with one or two ordinary, honestly-used
+    phrases (a memo that happens to say "furthermore" once) gets divided by
+    a tiny denominator and saturates near 1.0 on real-world text that was
+    only ever meant to catch text repeating these phrases over and over. The
+    floor means short text needs the SAME absolute number of hits a longer
+    templated passage would, rather than getting graded on a curve that
+    punishes brevity.
     """
     words = re.findall(r"[a-z0-9']+", text.lower())
     if not words:
         return 0.0
 
-    density = phrase_count(text) / (len(words) / 100)
+    normalizing_words = max(len(words), 150)
+    density = phrase_count(text) / (normalizing_words / 100)
     ceiling = 4.0
     return round(min(density / ceiling, 1.0), 4)
 

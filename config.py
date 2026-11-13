@@ -61,6 +61,17 @@ MAX_TEXT_LENGTH = 100_000
 WEIGHT_MODEL_SIGNAL = 0.5
 WEIGHT_STYLE_SIGNAL = 0.5
 
+# ─── Phrasing signal (UNIT 9 — capstone extension) ───────────────────────────
+# A third signal: density of generic AI transition/hedge phrases
+# ("furthermore", "in conclusion", ...). See phrasing.py.
+#
+# Weights below are what combine_signals actually uses once all three signals
+# are present; WEIGHT_MODEL_SIGNAL / WEIGHT_STYLE_SIGNAL above are kept for
+# anything still calling the two-signal path directly.
+WEIGHT_MODEL_SIGNAL_3 = 0.40
+WEIGHT_STYLE_SIGNAL_3 = 0.35
+WEIGHT_PHRASING_SIGNAL = 0.25
+
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
 # Where one label becomes another. Scores run 0.0 (confidently human) to 1.0

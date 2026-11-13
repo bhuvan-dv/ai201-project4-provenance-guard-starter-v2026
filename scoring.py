@@ -19,9 +19,11 @@ you claim, so that line should read `scoring.py::combine_signals`.
 import config
 
 
-def combine_signals(model_score: float, style_score: float) -> float:
+def combine_signals(
+    model_score: float, style_score: float, phrasing_score: float | None = None
+) -> float:
     """
-    Combine two 0–1 signals into one 0–1 score. ← TODO (Milestone 4)
+    Combine two or three 0–1 signals into one 0–1 score.
 
     Both inputs point the same way: higher means more likely AI. Your output
     should too.
@@ -59,15 +61,35 @@ def combine_signals(model_score: float, style_score: float) -> float:
     the site, so on a sharp disagreement the benefit of the doubt goes to the
     writer rather than splitting the difference at 0.5 ("unsure" either way).
     """
+    if phrasing_score is None:
+        # Unit 7/8 path — two signals, unchanged from before the capstone.
+        base = (
+            config.WEIGHT_MODEL_SIGNAL * model_score
+            + config.WEIGHT_STYLE_SIGNAL * style_score
+        )
+        if abs(model_score - style_score) > 0.4:
+            lower = min(model_score, style_score)
+            higher = max(model_score, style_score)
+            base = 0.65 * lower + 0.35 * higher
+        return round(min(max(base, 0.0), 1.0), 4)
+
+    # Unit 9 — three signals. Same philosophy, extended: a straight weighted
+    # average most of the time, but when the signals spread out (someone is
+    # getting a clearly mixed verdict), the benefit of the doubt shifts
+    # toward whichever signal reads most human rather than splitting the
+    # difference. 0.4 is the same disagreement threshold as the two-signal
+    # rule; "spread" here is the gap between the most- and least-suspicious
+    # signal rather than a pairwise difference.
+    scores = [model_score, style_score, phrasing_score]
     base = (
-        config.WEIGHT_MODEL_SIGNAL * model_score
-        + config.WEIGHT_STYLE_SIGNAL * style_score
+        config.WEIGHT_MODEL_SIGNAL_3 * model_score
+        + config.WEIGHT_STYLE_SIGNAL_3 * style_score
+        + config.WEIGHT_PHRASING_SIGNAL * phrasing_score
     )
 
-    if abs(model_score - style_score) > 0.4:
-        lower = min(model_score, style_score)
-        higher = max(model_score, style_score)
-        base = 0.65 * lower + 0.35 * higher
+    if max(scores) - min(scores) > 0.4:
+        lowest, mid, highest = sorted(scores)
+        base = 0.5 * lowest + 0.3 * mid + 0.2 * highest
 
     return round(min(max(base, 0.0), 1.0), 4)
 

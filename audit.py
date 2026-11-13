@@ -38,9 +38,11 @@ def log_decision(
     guess: str | None = None,
     model_score: float | None = None,
     style_score: float | None = None,
+    phrasing_score: float | None = None,
     combined_score: float | None = None,
     label: str | None = None,
     status: str = "decided",
+    duration_ms: float | None = None,
     **extra,
 ) -> dict:
     """
@@ -55,6 +57,11 @@ def log_decision(
     `status` moves over an item's life: `decided` when first judged,
     `under_review` once the writer appeals.
 
+    `phrasing_score` and `duration_ms` are the unit 9 capstone additions: the
+    third signal's raw score, and how long the whole /submit pipeline took
+    for this request, in milliseconds — the number instrumentation and the
+    cost measurement are both built on.
+
     Anything extra you pass gets written too — useful for `rejected` entries in
     unit 8, where there's no decision but you still want the trace.
     """
@@ -65,9 +72,11 @@ def log_decision(
         "guess": guess,
         "model_score": model_score,
         "style_score": style_score,
+        "phrasing_score": phrasing_score,
         "combined_score": combined_score,
         "label": label,
         "status": status,
+        "duration_ms": duration_ms,
     }
     entry.update(extra)
     return _append(entry)

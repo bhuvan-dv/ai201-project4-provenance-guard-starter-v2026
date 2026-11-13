@@ -24,6 +24,7 @@ Routes:
     GET  /health      is the service up, and is the model loaded
 """
 
+import time
 import uuid
 
 from flask import Flask, jsonify, request
@@ -31,6 +32,7 @@ from flask import Flask, jsonify, request
 import audit
 import config
 import detector
+import phrasing
 import scoring
 import stylometry
 
@@ -202,6 +204,7 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
+    start = time.monotonic()
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         payload = {}
@@ -210,7 +213,11 @@ def submit():
     creator_id = payload.get("creator_id") or "unknown"
 
     if not isinstance(text, str) or not text.strip():
-        audit.log_rejection(creator_id=creator_id, reason="missing_text")
+        audit.log_rejection(
+            creator_id=creator_id,
+            reason="missing_text",
+            duration_ms=round((time.monotonic() - start) * 1000, 1),
+        )
         return jsonify({
             "error": "bad_request",
             "message": "`text` is required and must be a non-empty string.",
@@ -218,7 +225,10 @@ def submit():
 
     if len(text) > config.MAX_TEXT_LENGTH:
         audit.log_rejection(
-            creator_id=creator_id, reason="text_too_long", length=len(text),
+            creator_id=creator_id,
+            reason="text_too_long",
+            length=len(text),
+            duration_ms=round((time.monotonic() - start) * 1000, 1),
         )
         return jsonify({
             "error": "bad_request",
@@ -231,15 +241,20 @@ def submit():
         return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
     except ValueError as exc:
         audit.log_rejection(
-            creator_id=creator_id, reason="text_too_short", detail=str(exc),
+            creator_id=creator_id,
+            reason="text_too_short",
+            detail=str(exc),
+            duration_ms=round((time.monotonic() - start) * 1000, 1),
         )
         return jsonify({"error": "bad_request", "message": str(exc)}), 400
 
     style_score = stylometry.style_signal(text)
-    combined = scoring.combine_signals(model_score, style_score)
+    phrasing_score = phrasing.phrasing_signal(text)
+    combined = scoring.combine_signals(model_score, style_score, phrasing_score)
     guess, label_text = scoring.score_to_label(combined)
 
     content_id = str(uuid.uuid4())
+    duration_ms = round((time.monotonic() - start) * 1000, 1)
 
     audit.log_decision(
         content_id=content_id,
@@ -247,8 +262,11 @@ def submit():
         guess=guess,
         model_score=model_score,
         style_score=style_score,
+        phrasing_score=phrasing_score,
         combined_score=combined,
         label=label_text,
+        duration_ms=duration_ms,
+        input_length=len(text),
     )
 
     return jsonify({
@@ -258,6 +276,8 @@ def submit():
         "label": label_text,
         "model_score": model_score,
         "style_score": style_score,
+        "phrasing_score": phrasing_score,
+        "duration_ms": duration_ms,
     })
 
 

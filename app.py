@@ -169,6 +169,12 @@ def submit():
         {"content_id": "...", "guess": "...", "confidence": 0.0, "label": "...",
          "model_score": 0.0, "style_score": 0.0}
 
+    ⚠️ **Capstone (Unit 9) addition:** the response and the audit log entry
+    also carry `phrasing_score` (the third signal, from `phrasing.py`) and
+    `duration_ms` (how long this whole function took, timed from the top).
+    Both get read the same way the two unit-7 scores do — straight off the
+    response, not re-derived.
+
     ⚠️ **Both signal scores go in the response, not just the log.** Unit 8's
     `run_attacks.py` and `run_eval.py` read `model_score` and `style_score`
     straight off this response and put them in your reports. Leave them out and
